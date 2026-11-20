@@ -159,6 +159,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 		_ application: UIApplication,
 		didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
 	) -> Bool {
+		// UG Sign: Semi Local is the default install server (Fully Local is
+		// broken on iOS 27 since backloop.dev shut down its certificate service).
+		// register(defaults:) only fills in the key when it has never been set,
+		// so a user who picked a server type keeps their choice.
+		UserDefaults.standard.register(defaults: ["Feather.serverMethod": 1])
 		_createPipeline()
 		_createDocumentsDirectories()
 		ResetView.clearWorkCache()
