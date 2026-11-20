@@ -46,13 +46,12 @@ enum TabEnum: String, CaseIterable, Hashable {
 		return [
 			.sources,
 			.library,
+			.certificates,
 			.settings
 		]
 	}
 	
 	static var customizableTabs: [TabEnum] {
-		return [
-			.certificates
-		]
+		return []
 	}
 }

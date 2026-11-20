@@ -40,11 +40,14 @@ struct FeatherApp: App {
 			}
 			// dear god help me
 			.onAppear {
-				if let style = UIUserInterfaceStyle(rawValue: UserDefaults.standard.integer(forKey: "Feather.userInterfaceStyle")) {
+				// UG Sign: dark by default on first launch, stored choice wins after that
+				let storedStyle = UserDefaults.standard.object(forKey: "Feather.userInterfaceStyle") as? Int
+				let styleRaw = storedStyle ?? UIUserInterfaceStyle.dark.rawValue
+				if let style = UIUserInterfaceStyle(rawValue: styleRaw) {
 					UIApplication.topViewController()?.view.window?.overrideUserInterfaceStyle = style
 				}
 				
-				UIApplication.topViewController()?.view.window?.tintColor = UIColor(Color(hex: UserDefaults.standard.string(forKey: "Feather.userTintColor") ?? "#848ef9"))
+				UIApplication.topViewController()?.view.window?.tintColor = UIColor(Color(hex: UserDefaults.standard.string(forKey: "Feather.userTintColor") ?? "#ff2d55"))
 			}
 		}
 	}

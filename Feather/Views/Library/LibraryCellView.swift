@@ -11,7 +11,6 @@ import NimbleViews
 
 // MARK: - View
 struct LibraryCellView: View {
-	@Environment(\.horizontalSizeClass) private var horizontalSizeClass
 	@Environment(\.editMode) private var editMode
 	@ObservedObject private var updateManager = UpdateManager.shared
 	@State private var _signedUpdateConfirmation: AppUpdate?
@@ -48,40 +47,64 @@ struct LibraryCellView: View {
 	
 	// MARK: Body
 	var body: some View {
-		let isRegular = horizontalSizeClass != .compact
 		let isEditing = editMode?.wrappedValue == .active
 		
-		HStack(spacing: 18) {
-			if isEditing {
-				Button {
-					_toggleSelection()
-				} label: {
-					Image(systemName: _isSelected ? "checkmark.circle.fill" : "circle")
-						.foregroundColor(_isSelected ? .accentColor : .secondary)
-						.font(.title2)
+		VStack(alignment: .leading, spacing: 12) {
+			HStack(spacing: 14) {
+				if isEditing {
+					Button {
+						_toggleSelection()
+					} label: {
+						Image(systemName: _isSelected ? "checkmark.circle.fill" : "circle")
+							.foregroundColor(_isSelected ? .accentColor : .secondary)
+							.font(.title2)
+					}
+					.buttonStyle(.borderless)
 				}
-				.buttonStyle(.borderless)
+				
+				_appIcon(for: app)
+				
+				VStack(alignment: .leading, spacing: 4) {
+					Text(app.name ?? .localized("Unknown"))
+						.font(.headline)
+						.lineLimit(1)
+					
+					Text(_desc)
+						.font(.subheadline)
+						.foregroundStyle(.secondary)
+						.lineLimit(1)
+					
+					if app.isSigned {
+						FRExpirationPillView(
+							title: .localized("Install"),
+							revoked: certRevoked,
+							expiration: certInfo
+						)
+					}
+				}
+				
+				Spacer()
 			}
-			
-			_appIcon(for: app)
-			
-			NBTitleWithSubtitleView(
-				title: app.name ?? .localized("Unknown"),
-				subtitle: _desc,
-				linelimit: 0
-			)
 			
 			if !isEditing {
-				_buttonActions(for: app)
+				_cardActionButton(for: app)
 			}
 		}
-		.padding(isRegular ? 12 : 0)
+		.padding(14)
 		.background(
-			isRegular
-				? RoundedRectangle(cornerRadius: 18, style: .continuous)
-				.fill(_isSelected && isEditing ? Color.accentColor.opacity(0.1) : Color(.quaternarySystemFill))
-				: nil
+			RoundedRectangle(cornerRadius: 20, style: .continuous)
+				.fill(Color(uiColor: .secondarySystemGroupedBackground))
 		)
+		.overlay(
+			RoundedRectangle(cornerRadius: 20, style: .continuous)
+				.strokeBorder(
+					_isSelected && isEditing ? Color.accentColor : Color.clear,
+					lineWidth: 2
+				)
+		)
+		.listRowBackground(Color.clear)
+		.listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
+		.listRowSeparator(.hidden)
 		.contentShape(Rectangle())
 		.onTapGesture {
 			if isEditing {
@@ -136,7 +159,7 @@ struct LibraryCellView: View {
 // MARK: - Extension: View
 extension LibraryCellView {
 	private func _appIcon(for app: AppInfoPresentable) -> some View {
-		FRAppIconView(app: app, size: 57)
+		FRAppIconView(app: app, size: 64)
 			.overlay(alignment: .topTrailing) {
 				if updateManager.update(for: app) != nil {
 					Image(systemName: "arrow.down.circle.fill")
@@ -207,7 +230,7 @@ extension LibraryCellView {
 	}
 	
 	@ViewBuilder
-	private func _buttonActions(for app: AppInfoPresentable) -> some View {
+	private func _cardActionButton(for app: AppInfoPresentable) -> some View {
 		Group {
 			if let update = updateManager.update(for: app) {
 				if app.isSigned {
@@ -215,46 +238,40 @@ extension LibraryCellView {
 						_signedUpdateConfirmation = update
 						_isSignedUpdateConfirmationPresented = true
 					} label: {
-						FRExpirationPillView(
-							title: .localized("Install"),
-							revoked: certRevoked,
-							expiration: certInfo
-						)
+						_ugActionLabel(.localized("Install Update"))
 					}
 				} else {
 					Button {
 						_startUpdateDownload(update)
 					} label: {
-						FRExpirationPillView(
-							title: .localized("Update"),
-							revoked: false,
-							expiration: nil
-						)
+						_ugActionLabel(.localized("Update"))
 					}
 				}
 			} else if app.isSigned {
 				Button {
 					selectedInstallAppPresenting = AnyApp(base: app)
 				} label: {
-					FRExpirationPillView(
-						title: .localized("Install"),
-						revoked: certRevoked,
-						expiration: certInfo
-					)
+					_ugActionLabel(.localized("Install"))
 				}
 			} else {
 				Button {
 					selectedSigningAppPresenting = AnyApp(base: app)
 				} label: {
-					FRExpirationPillView(
-						title: .localized("Sign"),
-						revoked: false,
-						expiration: nil
-					)
+					_ugActionLabel(.localized("Sign & Install"))
 				}
 			}
 		}
-		.buttonStyle(.borderless)
+		.buttonStyle(.plain)
+	}
+	
+	private func _ugActionLabel(_ title: String) -> some View {
+		Text(title)
+			.font(.headline)
+			.foregroundStyle(.white)
+			.frame(maxWidth: .infinity)
+			.padding(.vertical, 12)
+			.background(Color(red: 1.0, green: 0.18, blue: 0.33))
+			.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 	}
 	
 	private func _startUpdateDownload(_ update: AppUpdate) {

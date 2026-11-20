@@ -35,10 +35,18 @@ struct AboutView: View {
 				VStack {
 					FRAppIconView(size: 72)
 					
-					Text(Bundle.main.exec)
+					Text("UG Sign")
 						.font(.largeTitle)
 						.bold()
 						.foregroundStyle(Color.accentColor)
+					
+					Text("by UG 404")
+						.font(.footnote)
+						.foregroundStyle(.secondary)
+					
+					Text(.localized("Based on Feather by khcrysalis"))
+						.font(.footnote)
+						.foregroundStyle(.secondary)
 					
 					HStack(spacing: 4) {
 						Text(.localized("Version"))

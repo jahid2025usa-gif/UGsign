@@ -47,6 +47,7 @@ struct SigningView: View {
 	var body: some View {
 		NBNavigationView("", displayMode: .inline) {
 			Form {
+				_header(for: app)
 				_customizationOptions(for: app)
 				_cert()
 				_customizationProperties(for: app)
@@ -67,7 +68,7 @@ struct SigningView: View {
 							Button {
 								_start()
 							} label: {
-								NBSheetButton(title: .localized("Start Signing"), style: .prominent)
+								NBSheetButton(title: .localized("SIGN & INSTALL"), style: .prominent)
 									.padding()
 							}
 							.buttonStyle(.plain)
@@ -80,10 +81,9 @@ struct SigningView: View {
 			.toolbar {
 				NBToolbarButton(role: .dismiss)
 				ToolbarItem(placement: .principal) {
-					Image("Glyph")
-						.resizable()
-						.scaledToFit()
-						.frame(height: 38)
+					Text("UG")
+						.font(.system(size: 24, weight: .black, design: .rounded))
+						.foregroundStyle(Color(red: 1.0, green: 0.18, blue: 0.33))
 				}
 				NBToolbarButton(
 					.localized("Reset"),
@@ -149,6 +149,29 @@ struct SigningView: View {
 
 // MARK: - Extension: View
 extension SigningView {
+	@ViewBuilder
+	private func _header(for app: AppInfoPresentable) -> some View {
+		Section {
+			VStack(spacing: 10) {
+				if let icon = appIcon {
+					Image(uiImage: icon)
+						.appIconStyle()
+				} else {
+					FRAppIconView(app: app, size: 88)
+				}
+				
+				Text(app.name ?? .localized("Unknown"))
+					.font(.title2.bold())
+				
+				Text(app.identifier ?? .localized("Unknown"))
+					.font(.footnote)
+					.foregroundStyle(.secondary)
+			}
+			.frame(maxWidth: .infinity)
+			.listRowBackground(EmptyView())
+		}
+	}
+	
 	@ViewBuilder
 	private func _customizationOptions(for app: AppInfoPresentable) -> some View {
 		NBSection(.localized("Customization")) {
