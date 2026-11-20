@@ -8,11 +8,17 @@
 import SwiftUI
 import PhotosUI
 import NimbleViews
+import Zip
 
 // MARK: - View
 struct SigningView: View {
 	@Environment(\.dismiss) var dismiss
 	@StateObject private var _optionsManager = OptionsManager.shared
+	
+	// UG Sign: compression level is shared with Settings → Archive &
+	// Compression (`Feather.compressionLevel` stores the index into
+	// `ZipCompression.allCases`, see `ArchiveHandler`).
+	@AppStorage("Feather.compressionLevel") private var _compressionLevel: Int = ZipCompression.DefaultCompression.rawValue
 	
 	@State private var _temporaryOptions: Options = OptionsManager.shared.options
 	@State private var _temporaryCertificate: Int
@@ -48,9 +54,14 @@ struct SigningView: View {
 		NBNavigationView("", displayMode: .inline) {
 			Form {
 				_header(for: app)
-				_customizationOptions(for: app)
-				_cert()
-				_customizationProperties(for: app)
+				_identity(for: app)
+				_certificate()
+				_logo(for: app)
+				_removeLibrary(for: app)
+				_injection(for: app)
+				_compression()
+				_other()
+				_moreOptions()
 				
 				// horrible
 				Rectangle()
@@ -68,7 +79,7 @@ struct SigningView: View {
 							Button {
 								_start()
 							} label: {
-								NBSheetButton(title: .localized("SIGN & INSTALL"), style: .prominent)
+								NBSheetButton(title: .localized("Signature"), style: .prominent)
 									.padding()
 							}
 							.buttonStyle(.plain)
@@ -172,37 +183,44 @@ extension SigningView {
 		}
 	}
 	
+	// MARK: - ESign-style sections
+	//
+	// ESign lays the signing screen out flat: one section per field, in
+	// this order — name, bundle id, clone, version, install, certificate,
+	// logo, library, injection, compression, then the "Other" toggles.
+	// Only options Feather's Zsign engine actually applies are shown;
+	// anything ESign has that Zsign cannot do is left out (see report).
+	
 	@ViewBuilder
-	private func _customizationOptions(for app: AppInfoPresentable) -> some View {
-		NBSection(.localized("Customization")) {
-			Menu {
-				Button(.localized("Select Alternative Icon"), systemImage: "app.dashed") { _isAltPickerPresenting = true }
-				Button(.localized("Choose from Files"), systemImage: "folder") { _isFilePickerPresenting = true }
-				Button(.localized("Choose from Photos"), systemImage: "photo") { _isImagePickerPresenting = true }
-			} label: {
-				if let icon = appIcon {
-					Image(uiImage: icon)
-						.appIconStyle()
-				} else {
-					FRAppIconView(app: app, size: 56)
-				}
-			}
-			
-			_infoCell(.localized("Name"), desc: _temporaryOptions.appName ?? app.name) {
+	private func _identity(for app: AppInfoPresentable) -> some View {
+		NBSection(.localized("App Name")) {
+			_valueCell(_temporaryOptions.appName ?? app.name) {
 				SigningPropertiesView(
-					title: .localized("Name"),
+					title: .localized("App Name"),
 					initialValue: _temporaryOptions.appName ?? (app.name ?? ""),
 					bindingValue: $_temporaryOptions.appName
 				)
 			}
-			_infoCell(.localized("Identifier"), desc: _temporaryOptions.appIdentifier ?? app.identifier) {
+		}
+		
+		NBSection(.localized("Bundle Identifier")) {
+			_valueCell(_temporaryOptions.appIdentifier ?? app.identifier) {
 				SigningPropertiesView(
-					title: .localized("Identifier"),
+					title: .localized("Bundle Identifier"),
 					initialValue: _temporaryOptions.appIdentifier ?? (app.identifier ?? ""),
 					bindingValue: $_temporaryOptions.appIdentifier
 				)
 			}
-			_infoCell(.localized("Version"), desc: _temporaryOptions.appVersion ?? app.version) {
+		}
+		
+		NBSection(.localized("App Clone")) {
+			Toggle(.localized("App Clone"), isOn: $_temporaryOptions.appClone)
+		} footer: {
+			Text(.localized("Installs a second copy of the app next to the original by adding .clone to the bundle id."))
+		}
+		
+		NBSection(.localized("Version")) {
+			_valueCell(_temporaryOptions.appVersion ?? app.version) {
 				SigningPropertiesView(
 					title: .localized("Version"),
 					initialValue: _temporaryOptions.appVersion ?? (app.version ?? ""),
@@ -210,11 +228,15 @@ extension SigningView {
 				)
 			}
 		}
+		
+		NBSection(.localized("Install after signed")) {
+			Toggle(.localized("Install after signed"), isOn: $_temporaryOptions.post_installAppAfterSigned)
+		}
 	}
 	
 	@ViewBuilder
-	private func _cert() -> some View {
-		NBSection(.localized("Signing")) {
+	private func _certificate() -> some View {
+		NBSection(.localized("Select Certificate")) {
 			if let cert = _selectedCert() {
 				NavigationLink {
 					CertificatesView(selectedCert: $_temporaryCertificate)
@@ -232,55 +254,223 @@ extension SigningView {
 	}
 	
 	@ViewBuilder
-	private func _customizationProperties(for app: AppInfoPresentable) -> some View {
-		NBSection(.localized("Advanced")) {
-			DisclosureGroup(.localized("Modify")) {
-				NavigationLink(.localized("Existing Dylibs")) {
-					SigningDylibView(
-						app: app,
-						options: $_temporaryOptions.optional()
-					)
+	private func _logo(for app: AppInfoPresentable) -> some View {
+		NBSection(.localized("Modify Logo")) {
+			HStack {
+				Text(.localized("Logo"))
+				Spacer()
+				Menu {
+					Button(.localized("Select Alternative Icon"), systemImage: "app.dashed") { _isAltPickerPresenting = true }
+					Button(.localized("Choose from Files"), systemImage: "folder") { _isFilePickerPresenting = true }
+					Button(.localized("Choose from Photos"), systemImage: "photo") { _isImagePickerPresenting = true }
+				} label: {
+					if let icon = appIcon {
+						Image(uiImage: icon)
+							.appIconStyle()
+					} else {
+						FRAppIconView(app: app, size: 56)
+					}
 				}
-				
-				NavigationLink(.localized("Frameworks & PlugIns")) {
-					SigningFrameworksView(
-						app: app,
-						options: $_temporaryOptions.optional()
-					)
-				}
-			
-				NavigationLink(.localized("Entitlements") + " (BETA)") {
-					SigningEntitlementsView(
-						bindingValue: $_temporaryOptions.appEntitlementsFile
-					)
-				}
-				
-				NavigationLink(.localized("Tweaks")) {
-					SigningTweaksView(
-						options: $_temporaryOptions
-					)
-				}
-			}
-			
-			NavigationLink(.localized("Properties")) {
-				Form { SigningOptionsView(
-					options: $_temporaryOptions,
-					temporaryOptions: _optionsManager.options
-				)}
-				.navigationTitle(.localized("Properties"))
 			}
 		}
 	}
 	
 	@ViewBuilder
-	private func _infoCell<V: View>(_ title: String, desc: String?, @ViewBuilder destination: () -> V) -> some View {
+	private func _removeLibrary(for app: AppInfoPresentable) -> some View {
+		NBSection(.localized("Remove existing library")) {
+			NavigationLink(.localized("Remove existing library")) {
+				SigningDylibView(
+					app: app,
+					options: $_temporaryOptions.optional()
+				)
+			}
+			
+			NavigationLink(.localized("Frameworks & PlugIns")) {
+				SigningFrameworksView(
+					app: app,
+					options: $_temporaryOptions.optional()
+				)
+			}
+		}
+	}
+	
+	@ViewBuilder
+	private func _injection(for app: AppInfoPresentable) -> some View {
+		NBSection(.localized("Library injection Settings")) {
+			HStack {
+				Text(.localized("inject path"))
+				Picker("", selection: $_temporaryOptions.injectPath) {
+					ForEach(Options.InjectPath.allCases, id: \.self) { path in
+						Text(path.localizedDescription).tag(path)
+					}
+				}
+				.pickerStyle(.segmented)
+				.labelsHidden()
+			}
+			
+			HStack {
+				Text(.localized("inject folder"))
+				Picker("", selection: $_temporaryOptions.injectFolder) {
+					ForEach(Options.InjectFolder.allCases, id: \.self) { folder in
+						Text(folder.localizedDescription).tag(folder)
+					}
+				}
+				.pickerStyle(.segmented)
+				.labelsHidden()
+			}
+			
+			Text(verbatim: "@executable_path/xxx.dylib")
+				.font(.footnote)
+				.foregroundStyle(.secondary)
+			
+			NavigationLink(.localized("Add library  (dylib,framework,deb)")) {
+				SigningTweaksView(
+					options: $_temporaryOptions
+				)
+			}
+			
+			Text(.localized("Add or replace info.plist content"))
+				.font(.footnote)
+				.foregroundStyle(.secondary)
+			
+			NavigationLink(.localized("Add Key - Value")) {
+				ConfigurationDictView(
+					title: .localized("Add Key - Value"),
+					dataDict: $_temporaryOptions.customInfoPlist,
+					keyLabel: .localized("Key"),
+					valueLabel: .localized("Value")
+				)
+			}
+			
+			Text(.localized("Custom signature entitlements,It may not be installed after signing."))
+				.font(.footnote)
+				.foregroundStyle(.secondary)
+			
+			NavigationLink(.localized("Select entitlements file")) {
+				SigningEntitlementsView(
+					bindingValue: $_temporaryOptions.appEntitlementsFile
+				)
+			}
+			
+			Text(.localized("Package file name"))
+				.font(.footnote)
+				.foregroundStyle(.secondary)
+			
+			Text(_packageFileName)
+				.font(.footnote)
+		} footer: {
+			Text(.localized("The number in the package file name is the time the IPA is packed."))
+		}
+	}
+	
+	@ViewBuilder
+	private func _compression() -> some View {
+		NBSection(.localized("Compress Level")) {
+			Picker("", selection: $_compressionLevel) {
+				Text(.localized("Speed")).tag(_compressionSpeedIndex)
+				Text(.localized("Balanced")).tag(_compressionBalancedIndex)
+				Text(.localized("Size")).tag(_compressionSizeIndex)
+			}
+			.pickerStyle(.segmented)
+			.labelsHidden()
+			
+			Text(_compressionDescription)
+				.font(.footnote)
+				.foregroundStyle(.secondary)
+		}
+	}
+	
+	@ViewBuilder
+	private func _other() -> some View {
+		NBSection(.localized("Other")) {
+			Toggle(.localized("Remove all plug-in"), isOn: $_temporaryOptions.removeAllPlugins)
+			Toggle(.localized("Remove all watch apps"), isOn: $_temporaryOptions.removeAllWatchApps)
+			Toggle(.localized("Set MinimumOSVersion:iOS 10.0"), isOn: _minimumOSVersionBinding)
+			Toggle(.localized("Remove UISupportedDevices"), isOn: $_temporaryOptions.removeSupportedDevices)
+			Toggle(.localized("Removed URLScheme"), isOn: $_temporaryOptions.removeURLScheme)
+			Toggle(.localized("Supports Document Browser"), isOn: $_temporaryOptions.fileSharing)
+			Toggle(.localized("Replace Substrate with ElleKit"), isOn: $_temporaryOptions.experiment_replaceSubstrateWithEllekit)
+			Toggle(.localized("Modify configuration only, no signature."), isOn: _modifyOnlyBinding)
+			Toggle(.localized("Remove mobileprovision after signing"), isOn: $_temporaryOptions.removeProvisioning)
+		} footer: {
+			Text(.localized("Replace Substrate with ElleKit rewrites jailbreak dependencies to ElleKit instead of CydiaSubstrate."))
+		}
+	}
+	
+	@ViewBuilder
+	private func _moreOptions() -> some View {
+		NBSection(.localized("More Options")) {
+			NavigationLink(.localized("More Options")) {
+				Form { SigningOptionsView(
+					options: $_temporaryOptions,
+					temporaryOptions: _optionsManager.options
+				)}
+				.navigationTitle(.localized("More Options"))
+			}
+		} footer: {
+			Text(.localized("Appearance, PPQ protection, file sharing, game mode and the rest of the signing options."))
+		}
+	}
+	
+	@ViewBuilder
+	private func _valueCell<V: View>(_ desc: String?, @ViewBuilder destination: () -> V) -> some View {
 		NavigationLink {
 			destination()
 		} label: {
-			LabeledContent(title) {
-				Text(desc ?? .localized("Unknown"))
-			}
+			Text(desc ?? .localized("Unknown"))
 		}
+	}
+	
+	// MARK: - Computed helpers
+	
+	/// `Feather.compressionLevel` is an index into `ZipCompression.allCases`.
+	private var _compressionSpeedIndex: Int {
+		ZipCompression.allCases.firstIndex(of: .BestSpeed) ?? 1
+	}
+	
+	private var _compressionBalancedIndex: Int {
+		ZipCompression.allCases.firstIndex(of: .DefaultCompression) ?? 2
+	}
+	
+	private var _compressionSizeIndex: Int {
+		ZipCompression.allCases.firstIndex(of: .BestCompression) ?? 3
+	}
+	
+	private var _compressionDescription: String {
+		if _compressionLevel == _compressionSpeedIndex {
+			.localized("Fast compression speed, low compression rate, large files")
+		} else if _compressionLevel == _compressionSizeIndex {
+			.localized("Slow compression speed, high compression rate, small files")
+		} else {
+			.localized("Balanced compression speed and file size")
+		}
+	}
+	
+	/// ESign's "Set MinimumOSVersion:iOS 10.0" toggle: on means iOS 10.0,
+	/// off means the app's own minimum. Any other value picked in the
+	/// defaults reads as off here until it is set to 10.0 or Default.
+	private var _minimumOSVersionBinding: Binding<Bool> {
+		Binding(
+			get: { _temporaryOptions.minimumAppRequirement == .v10 },
+			set: { _temporaryOptions.minimumAppRequirement = $0 ? .v10 : .default }
+		)
+	}
+	
+	/// ESign's "Modify configuration only, no signature." toggle maps to
+	/// Feather's `SigningOption.onlyModify`.
+	private var _modifyOnlyBinding: Binding<Bool> {
+		Binding(
+			get: { _temporaryOptions.signingOption == .onlyModify },
+			set: { _temporaryOptions.signingOption = $0 ? .onlyModify : .default }
+		)
+	}
+	
+	/// The name the signed IPA is saved under, same scheme as
+	/// `ArchiveHandler.moveToArchive` (`Name_Version_timestamp.ipa`).
+	private var _packageFileName: String {
+		let name = _temporaryOptions.appName ?? app.name ?? "App"
+		let version = _temporaryOptions.appVersion ?? app.version ?? ""
+		return "\(name)_\(version)_\(Int(Date().timeIntervalSince1970)).ipa"
 	}
 }
 

@@ -29,6 +29,13 @@ struct SigningOptionsView: View {
 		}
 		
 		NBSection(.localized("General")) {
+			_toggle(
+				.localized("App Clone"),
+				systemImage: "square.on.square",
+				isOn: $options.appClone,
+				temporaryValue: temporaryOptions?.appClone
+			)
+			
 			Self.picker(
 				.localized("Appearance"),
 				systemImage: "paintpalette",
@@ -42,6 +49,19 @@ struct SigningOptionsView: View {
 				selection: $options.minimumAppRequirement,
 				values: Options.MinimumAppRequirement.allCases
 			)
+		}
+		
+		NBSection(.localized("Properties")) {
+			NavigationLink(.localized("Add Key - Value")) {
+				ConfigurationDictView(
+					title: .localized("Add Key - Value"),
+					dataDict: $options.customInfoPlist,
+					keyLabel: .localized("Key"),
+					valueLabel: .localized("Value")
+				)
+			}
+		} footer: {
+			Text(.localized("Custom text values added to the app's Info.plist when signing."))
 		}
 		
 		Section {
@@ -116,6 +136,27 @@ struct SigningOptionsView: View {
 		}
 		
 		NBSection(.localized("Removal")) {
+			_toggle(
+				.localized("Remove all PlugIns"),
+				systemImage: "puzzlepiece.extension",
+				isOn: $options.removeAllPlugins,
+				temporaryValue: temporaryOptions?.removeAllPlugins
+			)
+			
+			_toggle(
+				.localized("Remove all Watch Apps"),
+				systemImage: "applewatch",
+				isOn: $options.removeAllWatchApps,
+				temporaryValue: temporaryOptions?.removeAllWatchApps
+			)
+			
+			_toggle(
+				.localized("Remove Supported Devices"),
+				systemImage: "iphone",
+				isOn: $options.removeSupportedDevices,
+				temporaryValue: temporaryOptions?.removeSupportedDevices
+			)
+			
 			_toggle(
 				.localized("Remove URL Scheme"),
 				systemImage: "ellipsis.curlybraces",

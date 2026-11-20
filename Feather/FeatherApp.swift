@@ -155,6 +155,15 @@ struct FeatherApp: App {
 }
 
 class AppDelegate: NSObject, UIApplicationDelegate {
+	// UG Sign: Lock Vertical (Settings) forces portrait. iPhone is
+	// portrait-only in Info.plist already, so this mainly locks iPad.
+	func application(
+		_ application: UIApplication,
+		supportedInterfaceOrientationsFor window: UIWindow?
+	) -> UIInterfaceOrientationMask {
+		UserDefaults.standard.bool(forKey: "UGSign.lockVertical") ? .portrait : .all
+	}
+	
 	func application(
 		_ application: UIApplication,
 		didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil

@@ -21,13 +21,15 @@ struct ConfigurationDictAddView: View {
 	}
 	
 	@Binding var dataDict: [String: String]
+	var keyLabel: String = .localized("Value")
+	var valueLabel: String = .localized("Replacement")
 	
 	// MARK: Body
 	var body: some View {
 		NBList(.localized("New")) {
 			Section {
-				TextField(.localized("Value"), text: $_newKey)
-				TextField(.localized("Replacement"), text: $_newValue)
+				TextField(keyLabel, text: $_newKey)
+				TextField(valueLabel, text: $_newValue)
 			}
 			.autocapitalization(.none)
 		}

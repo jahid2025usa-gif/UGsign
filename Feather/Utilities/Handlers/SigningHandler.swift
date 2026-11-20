@@ -56,6 +56,19 @@ final class SigningHandler: NSObject {
 			throw SigningFileHandlerError.appNotFound
 		}
 		
+		// UG Sign: App Clone installs a second copy of the app next to the
+		// original by suffixing the bundle id. Done here (not in the view)
+		// so plug-in identifiers are rewritten to match as well.
+		if _options.appClone {
+			let baseIdentifier = _options.appIdentifier ?? _app.identifier
+			if
+				let baseIdentifier,
+				!baseIdentifier.hasSuffix(".clone")
+			{
+				_options.appIdentifier = "\(baseIdentifier).clone"
+			}
+		}
+		
 		guard
 			let infoDictionary = NSDictionary(
 				contentsOf: movedAppPath.appendingPathComponent("Info.plist")
@@ -79,6 +92,10 @@ final class SigningHandler: NSObject {
 		
 		if let name = _options.appName {
 			try await _modifyLocalesForName(name, for: movedAppPath)
+		}
+		
+		if _options.removeAllPlugins {
+			try _fileManager.removeFileIfNeeded(at: movedAppPath.appendingPathComponent("PlugIns"))
 		}
 		
 		if !_options.removeFiles.isEmpty {
@@ -208,8 +225,14 @@ extension SigningHandler {
 		if options.experiment_disableLiquidGlass { infoDictionary.setObject(true, forKey: "UIDesignRequiresCompatibility" as NSCopying) }
 		if options.experiment_supportLiquidGlass { infoDictionary.setObject(false, forKey: "UIDesignRequiresCompatibility" as NSCopying) }
 		
-		// useless crap
-		if infoDictionary["UISupportedDevices"] != nil {
+		// UG Sign: custom Info.plist key-values from the signing screen.
+		// Applied before the prominent values below, so a custom name,
+		// identifier or version never overrides the fields above.
+		for (key, value) in options.customInfoPlist {
+			infoDictionary.setObject(value, forKey: key as NSCopying)
+		}
+		
+		if options.removeSupportedDevices, infoDictionary["UISupportedDevices"] != nil {
 			infoDictionary.removeObject(forKey: "UISupportedDevices")
 		}
 		
@@ -373,6 +396,13 @@ extension SigningHandler {
 	private func _removeWatchIfNeeded(for app: URL) async throws {
 		let watchDir = app.appendingPathComponent("Watch")
 		guard _fileManager.fileExists(atPath: watchDir.path) else { return }
+		
+		// UG Sign: Remove all watch apps drops the whole Watch folder,
+		// otherwise only watch apps without an Info.plist are dropped.
+		if _options.removeAllWatchApps {
+			try _fileManager.removeFileIfNeeded(at: watchDir)
+			return
+		}
 		
 		let contents = try _fileManager.contentsOfDirectory(at: watchDir, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
 		

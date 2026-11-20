@@ -14,6 +14,10 @@ struct ConfigurationDictView: View {
 	
 	var title: String
 	@Binding var dataDict: [String: String]
+	// Labels for the add screen. Defaults are the name/identifier rule
+	// labels; the Info.plist editor passes Key/Value instead.
+	var keyLabel: String = .localized("Value")
+	var valueLabel: String = .localized("Replacement")
 	
 	// MARK: Body
 	var body: some View {
@@ -36,7 +40,7 @@ struct ConfigurationDictView: View {
 			}
 		}
 		.navigationDestination(isPresented: $_isAddingPresenting) {
-			ConfigurationDictAddView(dataDict: $dataDict)
+			ConfigurationDictAddView(dataDict: $dataDict, keyLabel: keyLabel, valueLabel: valueLabel)
 		}
 	}
 }

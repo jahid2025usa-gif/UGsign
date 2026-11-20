@@ -93,6 +93,16 @@ struct Options: Codable, Equatable {
 	var identifiers: [String: String]
 	/// App name list which matches and replaces
 	var displayNames: [String: String]
+	/// Custom Info.plist key-values applied when signing (text values only)
+	var customInfoPlist: [String: String]
+	/// If the app should be installed as a second copy (`.clone` bundle id)
+	var appClone: Bool
+	/// If all PlugIns should be removed from the app
+	var removeAllPlugins: Bool
+	/// If all Watch apps should be removed from the app
+	var removeAllWatchApps: Bool
+	/// If `UISupportedDevices` should be removed from the Info.plist
+	var removeSupportedDevices: Bool
 	/// Array of files (`.dylib`, `.deb` ) to extract and inject
 	var injectionFiles: [URL]
 	/// Mach-o load paths to remove (i.e. `@executable_path/demo1.dylib`)
@@ -140,8 +150,11 @@ struct Options: Codable, Equatable {
 		
 		// MARK: Pre Modifications
 		
+		// UG Sign (ESign parity): a fresh install signs like ESign does by
+		// default — MinimumOSVersion iOS 10.0, no embedded mobileprovision,
+		// and no UISupportedDevices list.
 		appAppearance: .default,
-		minimumAppRequirement: .default,
+		minimumAppRequirement: .v10,
 		signingOption: .default,
 		
 		// MARK: Options
@@ -153,6 +166,11 @@ struct Options: Codable, Equatable {
 		dynamicProtection: false,
 		identifiers: [:],
 		displayNames: [:],
+		customInfoPlist: [:],
+		appClone: false,
+		removeAllPlugins: false,
+		removeAllWatchApps: false,
+		removeSupportedDevices: true,
 		injectionFiles: [],
 		disInjectionFiles: [],
 		removeFiles: [],
@@ -162,7 +180,7 @@ struct Options: Codable, Equatable {
 		gameMode: false,
 		ipadFullscreen: false,
 		removeURLScheme: false,
-		removeProvisioning: false,
+		removeProvisioning: true,
 		changeLanguageFilesForCustomDisplayName: false,
 		injectIntoExtensions: false,
 		mergeEntitlements: false,
@@ -202,6 +220,8 @@ struct Options: Codable, Equatable {
 		case v14 = "14.0"
 		case v13 = "13.0"
 		case v12 = "12.0"
+		case v11 = "11.0"
+		case v10 = "10.0"
 
 		var localizedDescription: String {
 			switch self {
@@ -211,6 +231,8 @@ struct Options: Codable, Equatable {
 			case .v14: "14.0"
 			case .v13: "13.0"
 			case .v12: "12.0"
+			case .v11: "11.0"
+			case .v10: "10.0"
 			}
 		}
 	}
