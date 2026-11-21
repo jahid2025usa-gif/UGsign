@@ -17,7 +17,7 @@
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "3379C1B82DA869A1004372DA"
                BuildableName = "UGSign.app"
-               BlueprintName = "Feather"
+               BlueprintName = "UGSign"
                ReferencedContainer = "container:Feather.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -46,7 +46,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "3379C1B82DA869A1004372DA"
             BuildableName = "UGSign.app"
-            BlueprintName = "Feather"
+            BlueprintName = "UGSign"
             ReferencedContainer = "container:Feather.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -63,7 +63,7 @@
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "3379C1B82DA869A1004372DA"
             BuildableName = "UGSign.app"
-            BlueprintName = "Feather"
+            BlueprintName = "UGSign"
             ReferencedContainer = "container:Feather.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
