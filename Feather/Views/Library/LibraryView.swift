@@ -11,6 +11,7 @@ import CoreData
 import NimbleViews
 import NimbleExtensions
 import UniformTypeIdentifiers
+import IDeviceSwift
 
 // MARK: - View
 struct LibraryView: View {
@@ -64,207 +65,247 @@ struct LibraryView: View {
 	// MARK: Body
 	var body: some View {
 		NBNavigationView("", displayMode: .inline) {
-			List {
-				if _apps.isEmpty {
-					Section {
-						VStack(spacing: 10) {
-							Image(systemName: "square.grid.2x2")
-								.font(.system(size: 40))
-								.foregroundStyle(.secondary)
-							Text(_scope == .signed ? .localized("No Signed Apps") : .localized("No Unsigned Apps"))
-								.font(.headline)
-							Text(.localized("Import an IPA file to sign and install it."))
-								.font(.footnote)
-								.foregroundStyle(.secondary)
-								.multilineTextAlignment(.center)
-						}
-						.frame(maxWidth: .infinity)
-						.padding(.vertical, 40)
-						.listRowBackground(Color.clear)
-						.listRowSeparator(.hidden)
-					}
-				} else {
-					ForEach(Array(_apps.enumerated()), id: \.offset) { _, app in
-						AppsRowView(
-							app: app,
-							isSelecting: _isSelecting,
-							isSelected: _selectedAppUUIDs.contains(app.uuid ?? "")
-						)
-						.contentShape(Rectangle())
-						.onTapGesture {
-							if _isSelecting {
-								_toggleSelection(app)
-							} else {
-								_actionApp = AnyApp(base: app)
-							}
-						}
-						.listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
-					}
-				}
+			_rows()
+		}
+		.toolbar { _toolbar() }
+		.sheet(item: $_selectedInfoAppPresenting) { app in
+			LibraryInfoView(app: app.base)
+		}
+		.sheet(item: $_selectedInstallAppPresenting) { app in
+			InstallPreviewView(app: app.base, isSharing: app.archive)
+				.presentationDetents([.height(200)])
+				.presentationDragIndicator(.visible)
+		}
+		.fullScreenCover(item: $_selectedSigningAppPresenting) { app in
+			SigningView(app: app.base)
+		}
+		.sheet(isPresented: $_isImportingPresenting) { _importSheet() }
+		.alert(.localized("Import from URL"), isPresented: $_isDownloadingPresenting) { _urlAlertActions() }
+		.confirmationDialog(
+			_actionApp?.base.name ?? "",
+			isPresented: _actionBinding,
+			titleVisibility: .visible,
+			presenting: _actionApp
+		) { app in _actionActions(app) }
+		.alert(
+			.localized("Delete App"),
+			isPresented: _deletingBinding,
+			presenting: _deletingApp
+		) { app in _deleteAlertActions(app) }
+		message: { app in
+			Text(.localized("Are you sure you want to delete “%@”?", arguments: app.base.name ?? ""))
+		}
+		.alert(_messageTitle, isPresented: _messageBinding) {
+			Button(.localized("OK"), role: .cancel) {}
+		} message: {
+			Text(_messageBody ?? "")
+		}
+		.overlay { _archivingOverlay() }
+		.onReceive(NotificationCenter.default.publisher(for: Notification.Name("UGSign.installApp"))) { _ in
+			if let latest = _signedApps.first {
+				_selectedInstallAppPresenting = AnyApp(base: latest)
 			}
-			.listStyle(.plain)
-			.searchable(
-				text: $_searchText,
-				placement: .navigationBarDrawer(displayMode: .always),
-				prompt: .localized("Search")
-			)
-			.toolbar {
-				ToolbarItem(placement: .principal) {
-					Picker("", selection: $_scope) {
-						Text(.localized("Unsigned")).tag(Scope.unsigned)
-						Text(.localized("Signed")).tag(Scope.signed)
-					}
-					.pickerStyle(.segmented)
-					.labelsHidden()
-					.frame(width: 210)
-				}
-				
-				ToolbarItem(placement: .topBarLeading) {
-					if _isSelecting {
-						Button(.localized("Delete"), role: .destructive) { _bulkDelete() }
-							.disabled(_selectedAppUUIDs.isEmpty)
-					} else {
-						Menu {
-							_importActions()
-						} label: {
-							Image(systemName: "plus.circle.fill")
-								.font(.system(size: 21))
-						}
-					}
-				}
-				
-				ToolbarItem(placement: .topBarTrailing) {
-					if _isSelecting {
-						Button(.localized("Done")) {
-							withAnimation(.easeInOut(duration: 0.2)) {
-								_isSelecting = false
-								_selectedAppUUIDs.removeAll()
-							}
-						}
-						.bold()
-					} else {
-						Button(.localized("Select")) {
-							withAnimation(.easeInOut(duration: 0.2)) {
-								_isSelecting = true
-							}
-						}
-					}
-				}
-			}
-			.sheet(item: $_selectedInfoAppPresenting) { app in
-				LibraryInfoView(app: app.base)
-			}
-			.sheet(item: $_selectedInstallAppPresenting) { app in
-				InstallPreviewView(app: app.base, isSharing: app.archive)
-					.presentationDetents([.height(200)])
-					.presentationDragIndicator(.visible)
-			}
-			.fullScreenCover(item: $_selectedSigningAppPresenting) { app in
-				SigningView(app: app.base)
-			}
-			.sheet(isPresented: $_isImportingPresenting) {
-				FileImporterRepresentableView(
-					allowedContentTypes: [.ipa, .tipa],
-					allowsMultipleSelection: true,
-					onDocumentsPicked: { urls in
-						for url in urls {
-							let id = "UGSignManualDownload_\(UUID().uuidString)"
-							let download = downloadManager.startArchive(from: url, id: id)
-							try? downloadManager.handlePachageFile(url: url, dl: download)
+		}
+	}
+	
+	// MARK: Bindings
+	private var _deletingBinding: Binding<Bool> {
+		Binding(
+			get: { _deletingApp != nil },
+			set: { if !$0 { _deletingApp = nil } }
+		)
+	}
+	
+	private var _messageBinding: Binding<Bool> {
+		Binding(
+			get: { _messageBody != nil },
+			set: { if !$0 { _messageBody = nil } }
+		)
+	}
+	
+	private var _actionBinding: Binding<Bool> {
+		Binding(
+			get: { _actionApp != nil },
+			set: { if !$0 { _actionApp = nil } }
+		)
+	}
+	
+	// MARK: Views
+	@ViewBuilder
+	private func _rows() -> some View {
+		List {
+			if _apps.isEmpty {
+				_emptyState()
+			} else {
+				ForEach(Array(_apps.enumerated()), id: \.offset) { _, app in
+					AppsRowView(
+						app: app,
+						isSelecting: _isSelecting,
+						isSelected: _selectedAppUUIDs.contains(app.uuid ?? "")
+					)
+					.contentShape(Rectangle())
+					.onTapGesture {
+						if _isSelecting {
+							_toggleSelection(app)
+						} else {
+							_actionApp = AnyApp(base: app)
 						}
 					}
-				)
-				.ignoresSafeArea()
+					.listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+				}
 			}
-			.alert(.localized("Import from URL"), isPresented: $_isDownloadingPresenting) {
-				TextField(.localized("URL"), text: $_alertDownloadString)
-					.textInputAutocapitalization(.never)
-					.keyboardType(.URL)
-				Button(.localized("Cancel"), role: .cancel) { _alertDownloadString = "" }
-				Button(.localized("OK")) {
-					if let url = URL(string: _alertDownloadString) {
-						_ = downloadManager.startDownload(from: url, id: "UGSignManualDownload_\(UUID().uuidString)")
+		}
+		.listStyle(.plain)
+		.searchable(
+			text: $_searchText,
+			placement: .navigationBarDrawer(displayMode: .always),
+			prompt: .localized("Search")
+		)
+	}
+	
+	@ViewBuilder
+	private func _emptyState() -> some View {
+		Section {
+			VStack(spacing: 10) {
+				Image(systemName: "square.grid.2x2")
+					.font(.system(size: 40))
+					.foregroundStyle(.secondary)
+				Text(_scope == .signed ? .localized("No Signed Apps") : .localized("No Unsigned Apps"))
+					.font(.headline)
+				Text(.localized("Import an IPA file to sign and install it."))
+					.font(.footnote)
+					.foregroundStyle(.secondary)
+					.multilineTextAlignment(.center)
+			}
+			.frame(maxWidth: .infinity)
+			.padding(.vertical, 40)
+			.listRowBackground(Color.clear)
+			.listRowSeparator(.hidden)
+		}
+	}
+	
+	@ViewBuilder
+	private func _toolbar() -> some View {
+		ToolbarItem(placement: .principal) {
+			Picker("", selection: $_scope) {
+				Text(.localized("Unsigned")).tag(Scope.unsigned)
+				Text(.localized("Signed")).tag(Scope.signed)
+			}
+			.pickerStyle(.segmented)
+			.labelsHidden()
+			.frame(width: 210)
+		}
+		
+		ToolbarItem(placement: .topBarLeading) {
+			if _isSelecting {
+				Button(.localized("Delete"), role: .destructive) { _bulkDelete() }
+					.disabled(_selectedAppUUIDs.isEmpty)
+			} else {
+				Menu {
+					_importActions()
+				} label: {
+					Image(systemName: "plus.circle.fill")
+						.font(.system(size: 21))
+				}
+			}
+		}
+		
+		ToolbarItem(placement: .topBarTrailing) {
+			if _isSelecting {
+				Button(.localized("Done")) {
+					withAnimation(.easeInOut(duration: 0.2)) {
+						_isSelecting = false
+						_selectedAppUUIDs.removeAll()
+					}
+				}
+				.bold()
+			} else {
+				Button(.localized("Select")) {
+					withAnimation(.easeInOut(duration: 0.2)) {
+						_isSelecting = true
 					}
 				}
 			}
-			.confirmationDialog(
-				_actionApp?.base.name ?? "",
-				isPresented: Binding(
-					get: { _actionApp != nil },
-					set: { if !$0 { _actionApp = nil } }
-				),
-				titleVisibility: .visible,
-				presenting: _actionApp
-			) { app in
-				Button(.localized("Signature"), systemImage: "signature") {
-					_selectedSigningAppPresenting = app
-				}
-				Button(.localized("Install"), systemImage: "square.and.arrow.down") {
-					_selectedInstallAppPresenting = app
-				}
-				Button(.localized("Extract Dylibs"), systemImage: "puzzlepiece.extension") {
-					_extractDylibs(app.base)
-				}
-				Button(.localized("Details"), systemImage: "info.circle") {
-					_selectedInfoAppPresenting = app
-				}
-				Button(.localized("Share"), systemImage: "square.and.arrow.up") {
-					_share(app.base)
-				}
-				Button(.localized("View file location"), systemImage: "folder") {
-					_viewLocation(app.base)
-				}
-				Button(.localized("Delete"), systemImage: "trash", role: .destructive) {
-					_deletingApp = app
-				}
-				Button(.localized("Cancel"), role: .cancel) {}
-			}
-			.alert(
-				.localized("Delete App"),
-				isPresented: Binding(
-					get: { _deletingApp != nil },
-					set: { if !$0 { _deletingApp = nil } }
-				),
-				presenting: _deletingApp
-			) { app in
-				Button(.localized("Delete"), role: .destructive) {
-					Storage.shared.deleteApp(for: app.base)
-					_deletingApp = nil
-				}
-				Button(.localized("Cancel"), role: .cancel) {}
-			} message: { app in
-				Text(.localized("Are you sure you want to delete “%@”?", arguments: app.base.name ?? ""))
-			}
-			.alert(
-				_messageTitle,
-				isPresented: Binding(
-					get: { _messageBody != nil },
-					set: { if !$0 { _messageBody = nil } }
-				)
-			) {
-				Button(.localized("OK"), role: .cancel) {}
-			} message: {
-				Text(_messageBody ?? "")
-			}
-			.overlay {
-				if _isArchiving {
-					ZStack {
-						Color.black.opacity(0.45).ignoresSafeArea()
-						VStack(spacing: 14) {
-							ProgressView().tint(.white)
-							Text(_archivingText)
-								.font(.subheadline)
-								.foregroundStyle(.white)
-						}
-						.padding(24)
-						.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-					}
+		}
+	}
+	
+	@ViewBuilder
+	private func _importSheet() -> some View {
+		FileImporterRepresentableView(
+			allowedContentTypes: [.ipa, .tipa],
+			allowsMultipleSelection: true,
+			onDocumentsPicked: { urls in
+				for url in urls {
+					let id = "UGSignManualDownload_\(UUID().uuidString)"
+					let download = downloadManager.startArchive(from: url, id: id)
+					try? downloadManager.handlePachageFile(url: url, dl: download)
 				}
 			}
-			.onReceive(NotificationCenter.default.publisher(for: Notification.Name("UGSign.installApp"))) { _ in
-				if let latest = _signedApps.first {
-					_selectedInstallAppPresenting = AnyApp(base: latest)
+		)
+		.ignoresSafeArea()
+	}
+	
+	@ViewBuilder
+	private func _urlAlertActions() -> some View {
+		TextField(.localized("URL"), text: $_alertDownloadString)
+			.textInputAutocapitalization(.never)
+			.keyboardType(.URL)
+		Button(.localized("Cancel"), role: .cancel) { _alertDownloadString = "" }
+		Button(.localized("OK")) {
+			if let url = URL(string: _alertDownloadString) {
+				_ = downloadManager.startDownload(from: url, id: "UGSignManualDownload_\(UUID().uuidString)")
+			}
+		}
+	}
+	
+	@ViewBuilder
+	private func _actionActions(_ app: AnyApp) -> some View {
+		Button(.localized("Signature"), systemImage: "signature") {
+			_selectedSigningAppPresenting = app
+		}
+		Button(.localized("Install"), systemImage: "square.and.arrow.down") {
+			_selectedInstallAppPresenting = app
+		}
+		Button(.localized("Extract Dylibs"), systemImage: "puzzlepiece.extension") {
+			_extractDylibs(app.base)
+		}
+		Button(.localized("Details"), systemImage: "info.circle") {
+			_selectedInfoAppPresenting = app
+		}
+		Button(.localized("Share"), systemImage: "square.and.arrow.up") {
+			_share(app.base)
+		}
+		Button(.localized("View file location"), systemImage: "folder") {
+			_viewLocation(app.base)
+		}
+		Button(.localized("Delete"), systemImage: "trash", role: .destructive) {
+			_deletingApp = app
+		}
+		Button(.localized("Cancel"), role: .cancel) {}
+	}
+	
+	@ViewBuilder
+	private func _deleteAlertActions(_ app: AnyApp) -> some View {
+		Button(.localized("Delete"), role: .destructive) {
+			Storage.shared.deleteApp(for: app.base)
+			_deletingApp = nil
+		}
+		Button(.localized("Cancel"), role: .cancel) {}
+	}
+	
+	@ViewBuilder
+	private func _archivingOverlay() -> some View {
+		if _isArchiving {
+			ZStack {
+				Color.black.opacity(0.45).ignoresSafeArea()
+				VStack(spacing: 14) {
+					ProgressView().tint(.white)
+					Text(_archivingText)
+						.font(.subheadline)
+						.foregroundStyle(.white)
 				}
+				.padding(24)
+				.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 			}
 		}
 	}
@@ -401,12 +442,10 @@ struct AppsRowView: View {
 				Text(app.name ?? .localized("Unknown"))
 					.font(.system(size: 17, weight: .semibold))
 					.lineLimit(1)
-				
 				Text(_subtitle)
 					.font(.system(size: 13))
 					.foregroundStyle(.secondary)
 					.lineLimit(1)
-				
 				Text(_fileName)
 					.font(.system(size: 13))
 					.foregroundStyle(.secondary)

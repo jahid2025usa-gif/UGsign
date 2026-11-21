@@ -24,146 +24,180 @@ struct DownloadsView: View {
 	// MARK: Body
 	var body: some View {
 		NBNavigationView(.localized("Downloads")) {
-			List {
-				if !_downloadManager.downloads.isEmpty {
-					NBSection(.localized("Downloading")) {
-						ForEach(_downloadManager.downloads) { download in
-							DownloadRow(download: download)
-								.swipeActions {
-									Button(role: .destructive) {
-										_downloadManager.cancelDownload(download)
-									} label: {
-										Label(.localized("Cancel"), systemImage: "xmark")
-									}
-								}
-						}
-					}
-				}
-				
-				if !_archives.isEmpty {
-					NBSection(.localized("Archived"), secondary: _archives.count.description) {
-						ForEach(_archives) { item in
-							HStack(spacing: 12) {
-								Image(systemName: "doc.zipper")
-									.font(.system(size: 20, weight: .semibold))
-									.foregroundStyle(Color(hex: "#0A84FF"))
-									.frame(width: 38, height: 38)
-									.background(Color(hex: "#0A84FF").opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-								
-								VStack(alignment: .leading, spacing: 3) {
-									Text(item.name)
-										.font(.system(size: 16, weight: .semibold))
-										.lineLimit(1)
-									Text(item.subtitle)
-										.font(.system(size: 13))
-										.foregroundStyle(.secondary)
-								}
-								
-								Spacer()
-							}
-							.contentShape(Rectangle())
-							.onTapGesture {
-								UIActivityViewController.show(activityItems: [item.url])
-							}
+			_sections()
+		}
+		.listStyle(.plain)
+		.toolbar { _toolbar() }
+		.alert(.localized("Download from URL"), isPresented: $_isURLPresenting) { _urlAlertActions() }
+		.sheet(isPresented: $_isImportingPresenting) { _importSheet() }
+		.sheet(item: $_infoArchive) { item in
+			FileInfoView(item: item)
+		}
+		.alert(
+			.localized("Delete File"),
+			isPresented: _deletingBinding,
+			presenting: _deletingArchive
+		) { item in _deleteActions(item) }
+		message: { item in
+			Text(.localized("Are you sure you want to delete “%@”?", arguments: item.name))
+		}
+		.onAppear(perform: _reloadArchives)
+		.onChange(of: _downloadManager.downloads.count) { _ in _reloadArchives() }
+	}
+	
+	// MARK: Bindings
+	private var _deletingBinding: Binding<Bool> {
+		Binding(
+			get: { _deletingArchive != nil },
+			set: { if !$0 { _deletingArchive = nil } }
+		)
+	}
+	
+	// MARK: Views
+	@ViewBuilder
+	private func _sections() -> some View {
+		List {
+			if !_downloadManager.downloads.isEmpty {
+				NBSection(.localized("Downloading")) {
+					ForEach(_downloadManager.downloads) { download in
+						DownloadRow(download: download)
 							.swipeActions {
 								Button(role: .destructive) {
-									_deletingArchive = item
+									_downloadManager.cancelDownload(download)
 								} label: {
-									Label(.localized("Delete"), systemImage: "trash")
-								}
-								Button {
-									_infoArchive = item
-								} label: {
-									Label(.localized("Info"), systemImage: "info.circle")
+									Label(.localized("Cancel"), systemImage: "xmark")
 								}
 							}
-						}
-					}
-				}
-				
-				if _downloadManager.downloads.isEmpty && _archives.isEmpty {
-					Section {
-						VStack(spacing: 10) {
-							Image(systemName: "arrow.down.circle")
-								.font(.system(size: 40))
-								.foregroundStyle(.secondary)
-							Text(.localized("No Downloads"))
-								.font(.headline)
-							Text(.localized("Download an app from a repository or import an IPA file."))
-								.font(.footnote)
-								.foregroundStyle(.secondary)
-								.multilineTextAlignment(.center)
-						}
-						.frame(maxWidth: .infinity)
-						.padding(.vertical, 40)
-						.listRowBackground(Color.clear)
-						.listRowSeparator(.hidden)
 					}
 				}
 			}
-			.listStyle(.plain)
-			.toolbar {
-				ToolbarItem(placement: .topBarTrailing) {
-					Menu {
-						Button(.localized("Download from URL"), systemImage: "globe") {
-							_urlString = ""
-							_isURLPresenting = true
-						}
-						Button(.localized("Import File"), systemImage: "folder") {
-							_isImportingPresenting = true
-						}
-						Divider()
-						Button(.localized("Open Archives"), systemImage: "archivebox") {
-							if let url = FileManager.default.archives.toSharedDocumentsURL() {
-								UIApplication.open(url)
-							}
-						}
-					} label: {
-						Image(systemName: "plus.circle.fill")
-							.font(.system(size: 21))
+			
+			if !_archives.isEmpty {
+				NBSection(.localized("Archived"), secondary: _archives.count.description) {
+					ForEach(_archives) { item in
+						_archiveRow(item)
 					}
 				}
 			}
-			.alert(.localized("Download from URL"), isPresented: $_isURLPresenting) {
-				TextField("https://", text: $_urlString)
-					.textInputAutocapitalization(.never)
-					.keyboardType(.URL)
-				Button(.localized("Cancel"), role: .cancel) {}
-				Button(.localized("Download")) { _startDownload() }
+			
+			if _downloadManager.downloads.isEmpty && _archives.isEmpty {
+				_emptyState()
 			}
-			.sheet(isPresented: $_isImportingPresenting) {
-				FileImporterRepresentableView(
-					allowedContentTypes: [.ipa, .tipa],
-					allowsMultipleSelection: true,
-					onDocumentsPicked: { urls in
-						for url in urls {
-							let id = "UGSignManualDownload_\(UUID().uuidString)"
-							let download = _downloadManager.startArchive(from: url, id: id)
-							try? _downloadManager.handlePachageFile(url: url, dl: download)
-						}
-					}
-				)
-				.ignoresSafeArea()
-			}
-			.sheet(item: $_infoArchive) { item in
-				FileInfoView(item: item)
-			}
-			.alert(
-				.localized("Delete File"),
-				isPresented: Binding(
-					get: { _deletingArchive != nil },
-					set: { if !$0 { _deletingArchive = nil } }
-				),
-				presenting: _deletingArchive
-			) { item in
-				Button(.localized("Delete"), role: .destructive) { _delete(item) }
-				Button(.localized("Cancel"), role: .cancel) {}
-			} message: { item in
-				Text(.localized("Are you sure you want to delete “%@”?", arguments: item.name))
-			}
-			.onAppear(perform: _reloadArchives)
-			.onChange(of: _downloadManager.downloads.count) { _ in _reloadArchives() }
 		}
+	}
+	
+	@ViewBuilder
+	private func _archiveRow(_ item: FileItem) -> some View {
+		HStack(spacing: 12) {
+			Image(systemName: "doc.zipper")
+				.font(.system(size: 20, weight: .semibold))
+				.foregroundStyle(Color(hex: "#0A84FF"))
+				.frame(width: 38, height: 38)
+				.background(Color(hex: "#0A84FF").opacity(0.14), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+			
+			VStack(alignment: .leading, spacing: 3) {
+				Text(item.name)
+					.font(.system(size: 16, weight: .semibold))
+					.lineLimit(1)
+				Text(item.subtitle)
+					.font(.system(size: 13))
+					.foregroundStyle(.secondary)
+			}
+			
+			Spacer()
+		}
+		.contentShape(Rectangle())
+		.onTapGesture {
+			UIActivityViewController.show(activityItems: [item.url])
+		}
+		.swipeActions {
+			Button(role: .destructive) {
+				_deletingArchive = item
+			} label: {
+				Label(.localized("Delete"), systemImage: "trash")
+			}
+			Button {
+				_infoArchive = item
+			} label: {
+				Label(.localized("Info"), systemImage: "info.circle")
+			}
+		}
+	}
+	
+	@ViewBuilder
+	private func _emptyState() -> some View {
+		Section {
+			VStack(spacing: 10) {
+				Image(systemName: "arrow.down.circle")
+					.font(.system(size: 40))
+					.foregroundStyle(.secondary)
+				Text(.localized("No Downloads"))
+					.font(.headline)
+				Text(.localized("Download an app from a repository or import an IPA file."))
+					.font(.footnote)
+					.foregroundStyle(.secondary)
+					.multilineTextAlignment(.center)
+			}
+			.frame(maxWidth: .infinity)
+			.padding(.vertical, 40)
+			.listRowBackground(Color.clear)
+			.listRowSeparator(.hidden)
+		}
+	}
+	
+	@ViewBuilder
+	private func _toolbar() -> some View {
+		ToolbarItem(placement: .topBarTrailing) {
+			Menu {
+				Button(.localized("Download from URL"), systemImage: "globe") {
+					_urlString = ""
+					_isURLPresenting = true
+				}
+				Button(.localized("Import File"), systemImage: "folder") {
+					_isImportingPresenting = true
+				}
+				Divider()
+				Button(.localized("Open Archives"), systemImage: "archivebox") {
+					if let url = FileManager.default.archives.toSharedDocumentsURL() {
+						UIApplication.open(url)
+					}
+				}
+			} label: {
+				Image(systemName: "plus.circle.fill")
+					.font(.system(size: 21))
+			}
+		}
+	}
+	
+	@ViewBuilder
+	private func _urlAlertActions() -> some View {
+		TextField("https://", text: $_urlString)
+			.textInputAutocapitalization(.never)
+			.keyboardType(.URL)
+		Button(.localized("Cancel"), role: .cancel) {}
+		Button(.localized("Download")) { _startDownload() }
+	}
+	
+	@ViewBuilder
+	private func _importSheet() -> some View {
+		FileImporterRepresentableView(
+			allowedContentTypes: [.ipa, .tipa],
+			allowsMultipleSelection: true,
+			onDocumentsPicked: { urls in
+				for url in urls {
+					let id = "UGSignManualDownload_\(UUID().uuidString)"
+					let download = _downloadManager.startArchive(from: url, id: id)
+					try? _downloadManager.handlePachageFile(url: url, dl: download)
+				}
+			}
+		)
+		.ignoresSafeArea()
+	}
+	
+	@ViewBuilder
+	private func _deleteActions(_ item: FileItem) -> some View {
+		Button(.localized("Delete"), role: .destructive) { _delete(item) }
+		Button(.localized("Cancel"), role: .cancel) {}
 	}
 	
 	// MARK: Helpers
@@ -231,7 +265,7 @@ struct DownloadRow: View {
 					Text(verbatim: "\(Int(_overallProgress * 100))%")
 					Spacer()
 					if _total > 0 {
-						Text(verbatim: "\(ByteCountFormatter.string(fromByteCount: _bytes, countStyle: .file)) / \(ByteCountFormatter.string(fromByteCount: _total, countStyle: .file))")
+						Text(verbatim: "\(_bytes.formattedByteCount) / \(_total.formattedByteCount)")
 					}
 				}
 				.font(.caption)

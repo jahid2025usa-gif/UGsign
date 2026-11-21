@@ -100,7 +100,7 @@ struct FileListView: View {
 	// MARK: Body
 	var body: some View {
 		NavigationStack(path: $_path) {
-			_content(for: _root)
+			_content(for: _path.last ?? _root)
 				.navigationDestination(for: URL.self) { url in
 					_content(for: url)
 				}
@@ -126,164 +126,125 @@ struct FileListView: View {
 	// MARK: Content
 	@ViewBuilder
 	private func _content(for directory: URL) -> some View {
-		let visible = _filteredItems
-		
-		List {
-			if visible.isEmpty {
-				Section {
-					VStack(spacing: 10) {
-						Image(systemName: "folder")
-							.font(.system(size: 38))
-							.foregroundStyle(.secondary)
-						Text(_searchText.isEmpty ? .localized("No Files") : .localized("No Results"))
-							.font(.headline)
-						Text(.localized("Import an IPA, certificate or any other file to get started."))
-							.font(.footnote)
-							.foregroundStyle(.secondary)
-							.multilineTextAlignment(.center)
-					}
-					.frame(maxWidth: .infinity)
-					.padding(.vertical, 40)
-					.listRowBackground(Color.clear)
-					.listRowSeparator(.hidden)
-				}
-			} else {
-				ForEach(visible) { item in
-					_row(item)
-						.listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
-						.swipeActions(edge: .trailing) {
-							Button(role: .destructive) {
-								_deletingItem = item
-							} label: {
-								Label(.localized("Delete"), systemImage: "trash")
-							}
-							
-							if !item.isDirectory {
-								Button {
-									UIActivityViewController.show(activityItems: [item.url])
-								} label: {
-									Label(.localized("Share"), systemImage: "square.and.arrow.up")
-								}
-								.tint(Color(hex: "#0A84FF"))
-							}
-						}
-				}
+		_rows()
+			.listStyle(.plain)
+			.navigationTitle(directory == _root ? .localized("File List") : directory.lastPathComponent)
+			.navigationBarTitleDisplayMode(.inline)
+			.searchable(
+				text: $_searchText,
+				placement: .navigationBarDrawer(displayMode: .always),
+				prompt: .localized("Search")
+			)
+			.toolbar { _toolbar(directory) }
+			.onAppear { _reload(directory) }
+			.onChange(of: directory) { _ in _reload(directory) }
+			.sheet(isPresented: $_isImportingPresenting) { _importSheet(directory) }
+			.sheet(item: $_infoItem) { item in FileInfoView(item: item) }
+			.alert(.localized("New Folder"), isPresented: $_isNewFolderPresenting) { _newFolderAlert(directory) }
+			.alert(
+				.localized("Delete File"),
+				isPresented: _deletingBinding,
+				presenting: _deletingItem
+			) { item in _deleteAlertActions(item) }
+			message: { item in
+				Text(.localized("Are you sure you want to delete “%@”?", arguments: item.name))
 			}
-		}
-		.listStyle(.plain)
-		.navigationTitle(directory == _root ? .localized("File List") : directory.lastPathComponent)
-		.navigationBarTitleDisplayMode(.inline)
-		.searchable(
-			text: $_searchText,
-			placement: .navigationBarDrawer(displayMode: .always),
-			prompt: .localized("Search")
+			.confirmationDialog(
+				_selectedItem?.name ?? "",
+				isPresented: _selectedBinding,
+				titleVisibility: .visible,
+				presenting: _selectedItem
+			) { item in _confirmationActions(item) }
+			.alert(
+				.localized("Error"),
+				isPresented: _errorMessageBinding
+			) {
+				Button(.localized("OK"), role: .cancel) {}
+			} message: {
+				Text(_errorMessage ?? "")
+			}
+			.overlay { _preparingOverlay() }
+	}
+	
+	// MARK: Bindings
+	private var _deletingBinding: Binding<Bool> {
+		Binding(
+			get: { _deletingItem != nil },
+			set: { if !$0 { _deletingItem = nil } }
 		)
-		.toolbar {
-			ToolbarItem(placement: .topBarTrailing) {
-				Menu {
-					Button(.localized("Import File"), systemImage: "square.and.arrow.down") {
-						_isImportingPresenting = true
-					}
-					Button(.localized("New Folder"), systemImage: "folder.badge.plus") {
-						_newFolderName = ""
-						_isNewFolderPresenting = true
-					}
-					Divider()
-					Button(.localized("Open in Files"), systemImage: "folder") {
-						if let url = directory.toSharedDocumentsURL() {
-							UIApplication.open(url)
-						}
-					}
-				} label: {
-					Image(systemName: "ellipsis.circle.fill")
-						.font(.system(size: 21))
-						.foregroundStyle(.secondary)
-				}
-			}
-		}
-		.onAppear { _reload(directory) }
-		.onChange(of: directory) { _ in _reload(directory) }
-		.sheet(isPresented: $_isImportingPresenting) {
-			FileImporterRepresentableView(
-				allowedContentTypes: [.item],
-				allowsMultipleSelection: true,
-				onDocumentsPicked: { urls in
-					_import(urls, into: directory)
-				}
-			)
-			.ignoresSafeArea()
-		}
-		.sheet(item: $_infoItem) { item in
-			FileInfoView(item: item)
-		}
-		.alert(.localized("New Folder"), isPresented: $_isNewFolderPresenting) {
-			TextField(.localized("Folder name"), text: $_newFolderName)
-			Button(.localized("Cancel"), role: .cancel) {}
-			Button(.localized("Create")) { _createFolder(in: directory) }
-		}
-		.alert(
-			.localized("Delete File"),
-			isPresented: Binding(
-				get: { _deletingItem != nil },
-				set: { if !$0 { _deletingItem = nil } }
-			),
-			presenting: _deletingItem
-		) { item in
-			Button(.localized("Delete"), role: .destructive) { _delete(item) }
-			Button(.localized("Cancel"), role: .cancel) {}
-		} message: { item in
-			Text(.localized("Are you sure you want to delete “%@”?", arguments: item.name))
-		}
-		.confirmationDialog(
-			_selectedItem?.name ?? "",
-			isPresented: Binding(
-				get: { _selectedItem != nil },
-				set: { if !$0 { _selectedItem = nil } }
-			),
-			titleVisibility: .visible,
-			presenting: _selectedItem
-		) { item in
-			if item.isInstallable {
-				Button(.localized("Signature"), systemImage: "signature") { _prepare(item, install: false) }
-				Button(.localized("Install"), systemImage: "square.and.arrow.down") { _prepare(item, install: true) }
-			}
-			Button(.localized("Share"), systemImage: "square.and.arrow.up") {
-				UIActivityViewController.show(activityItems: [item.url])
-			}
-			Button(.localized("Info"), systemImage: "info.circle") { _infoItem = item }
-			Button(.localized("Delete"), systemImage: "trash", role: .destructive) { _deletingItem = item }
-			Button(.localized("Cancel"), role: .cancel) {}
-		}
-		.alert(
-			.localized("Error"),
-			isPresented: Binding(
-				get: { _errorMessage != nil },
-				set: { if !$0 { _errorMessage = nil } }
-			)
-		) {
-			Button(.localized("OK"), role: .cancel) {}
-		} message: {
-			Text(_errorMessage ?? "")
-		}
-		.overlay {
-			if _isPreparingPackage {
-				ZStack {
-					Color.black.opacity(0.45).ignoresSafeArea()
-					VStack(spacing: 14) {
-						ProgressView()
-							.tint(.white)
-						Text(_preparingText)
-							.font(.subheadline)
-							.foregroundStyle(.white)
-					}
-					.padding(24)
-					.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-				}
+	}
+	
+	private var _selectedBinding: Binding<Bool> {
+		Binding(
+			get: { _selectedItem != nil },
+			set: { if !$0 { _selectedItem = nil } }
+		)
+	}
+	
+	private var _errorMessageBinding: Binding<Bool> {
+		Binding(
+			get: { _errorMessage != nil },
+			set: { if !$0 { _errorMessage = nil } }
+		)
+	}
+	
+	// MARK: Views
+	@ViewBuilder
+	private func _rows() -> some View {
+		List {
+			if _filteredItems.isEmpty {
+				_emptyState()
+			} else {
+				_fileRows()
 			}
 		}
 	}
 	
-	// MARK: Row
+	@ViewBuilder
+	private func _emptyState() -> some View {
+		Section {
+			VStack(spacing: 10) {
+				Image(systemName: "folder")
+					.font(.system(size: 38))
+					.foregroundStyle(.secondary)
+				Text(_searchText.isEmpty ? .localized("No Files") : .localized("No Results"))
+					.font(.headline)
+				Text(.localized("Import an IPA, certificate or any other file to get started."))
+					.font(.footnote)
+					.foregroundStyle(.secondary)
+					.multilineTextAlignment(.center)
+			}
+			.frame(maxWidth: .infinity)
+			.padding(.vertical, 40)
+			.listRowBackground(Color.clear)
+			.listRowSeparator(.hidden)
+		}
+	}
+	
+	@ViewBuilder
+	private func _fileRows() -> some View {
+		ForEach(_filteredItems) { item in
+			_row(item)
+				.listRowBackground(Color(uiColor: .secondarySystemGroupedBackground))
+				.swipeActions(edge: .trailing) {
+					Button(role: .destructive) {
+						_deletingItem = item
+					} label: {
+						Label(.localized("Delete"), systemImage: "trash")
+					}
+					
+					if !item.isDirectory {
+						Button {
+							UIActivityViewController.show(activityItems: [item.url])
+						} label: {
+							Label(.localized("Share"), systemImage: "square.and.arrow.up")
+						}
+						.tint(Color(hex: "#0A84FF"))
+					}
+				}
+		}
+	}
+	
 	@ViewBuilder
 	private func _row(_ item: FileItem) -> some View {
 		HStack(spacing: 12) {
@@ -325,6 +286,88 @@ struct FileListView: View {
 			.buttonStyle(.plain)
 		}
 		.padding(.vertical, 4)
+	}
+	
+	@ViewBuilder
+	private func _toolbar(_ directory: URL) -> some View {
+		ToolbarItem(placement: .topBarTrailing) {
+			Menu {
+				Button(.localized("Import File"), systemImage: "square.and.arrow.down") {
+					_isImportingPresenting = true
+				}
+				Button(.localized("New Folder"), systemImage: "folder.badge.plus") {
+					_newFolderName = ""
+					_isNewFolderPresenting = true
+				}
+				Divider()
+				Button(.localized("Open in Files"), systemImage: "folder") {
+					if let url = directory.toSharedDocumentsURL() {
+						UIApplication.open(url)
+					}
+				}
+			} label: {
+				Image(systemName: "ellipsis.circle.fill")
+					.font(.system(size: 21))
+					.foregroundStyle(.secondary)
+			}
+		}
+	}
+	
+	@ViewBuilder
+	private func _importSheet(_ directory: URL) -> some View {
+		FileImporterRepresentableView(
+			allowedContentTypes: [.item],
+			allowsMultipleSelection: true,
+			onDocumentsPicked: { urls in
+				_import(urls, into: directory)
+			}
+		)
+		.ignoresSafeArea()
+	}
+	
+	@ViewBuilder
+	private func _newFolderAlert(_ directory: URL) -> some View {
+		TextField(.localized("Folder name"), text: $_newFolderName)
+		Button(.localized("Cancel"), role: .cancel) {}
+		Button(.localized("Create")) { _createFolder(in: directory) }
+	}
+	
+	@ViewBuilder
+	private func _deleteAlertActions(_ item: FileItem) -> some View {
+		Button(.localized("Delete"), role: .destructive) { _delete(item) }
+		Button(.localized("Cancel"), role: .cancel) {}
+	}
+	
+	@ViewBuilder
+	private func _confirmationActions(_ item: FileItem) -> some View {
+		if item.isInstallable {
+			Button(.localized("Signature"), systemImage: "signature") { _prepare(item, install: false) }
+			Button(.localized("Install"), systemImage: "square.and.arrow.down") { _prepare(item, install: true) }
+		}
+		Button(.localized("Share"), systemImage: "square.and.arrow.up") {
+			UIActivityViewController.show(activityItems: [item.url])
+		}
+		Button(.localized("Info"), systemImage: "info.circle") { _infoItem = item }
+		Button(.localized("Delete"), systemImage: "trash", role: .destructive) { _deletingItem = item }
+		Button(.localized("Cancel"), role: .cancel) {}
+	}
+	
+	@ViewBuilder
+	private func _preparingOverlay() -> some View {
+		if _isPreparingPackage {
+			ZStack {
+				Color.black.opacity(0.45).ignoresSafeArea()
+				VStack(spacing: 14) {
+					ProgressView()
+						.tint(.white)
+					Text(_preparingText)
+						.font(.subheadline)
+						.foregroundStyle(.white)
+				}
+				.padding(24)
+				.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+			}
+		}
 	}
 	
 	// MARK: Helpers
