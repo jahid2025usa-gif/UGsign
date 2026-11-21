@@ -1,4 +1,4 @@
-NAME := Feather
+NAME := UGSign
 SCHEME := Feather
 PLATFORMS := iphoneos maccatalyst
 
@@ -18,10 +18,13 @@ deps:
 	rm -rf deps || true
 	mkdir -p deps
 
-	curl -fsSL "$(CERT_JSON_URL)" -o cert.json
-	jq -r '.cert' cert.json > deps/server.crt
-	jq -r '.key1, .key2' cert.json > deps/server.pem
-	jq -r '.info.domains.commonName' cert.json > deps/commonName.txt
+	@if curl -fsSL "$(CERT_JSON_URL)" -o cert.json; then \
+		jq -r '.cert' cert.json > deps/server.crt; \
+		jq -r '.key1, .key2' cert.json > deps/server.pem; \
+		jq -r '.info.domains.commonName' cert.json > deps/commonName.txt; \
+	else \
+		echo "warning: certificate pack unavailable; building without local TLS assets (Semi Local installs still work)"; \
+	fi
 
 
 $(PLATFORMS): deps
@@ -43,15 +46,15 @@ $(PLATFORMS): deps
 		ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES=NO
 
 	mkdir -p _build/Payload
-	cp -R _build/Applications/*.app _build/Payload/Feather.app
-	chmod -R 0755 _build/Payload/Feather.app
-	codesign --force --sign - --timestamp=none _build/Payload/Feather.app
-	cp deps/* _build/Payload/Feather.app/ || true
+	cp -R _build/Applications/*.app _build/Payload/UGSign.app
+	chmod -R 0755 _build/Payload/UGSign.app
+	codesign --force --sign - --timestamp=none _build/Payload/UGSign.app
+	cp deps/* _build/Payload/UGSign.app/ || true
 
 	mkdir -p packages
 
 	@if [ "$@" = "iphoneos" ]; then \
-		ditto -c -k --sequesterRsrc --keepParent _build/Payload "packages/Feather.ipa"; \
+		ditto -c -k --sequesterRsrc --keepParent _build/Payload "packages/UGSign.ipa"; \
 	else \
-		ditto -c -k --sequesterRsrc --keepParent _build/Payload/Feather.app "packages/Feather_Catalyst.zip"; \
+		ditto -c -k --sequesterRsrc --keepParent _build/Payload/UGSign.app "packages/UGSign_Catalyst.zip"; \
 	fi

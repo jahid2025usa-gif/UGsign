@@ -9,7 +9,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: main
@@ -23,7 +23,7 @@ jobs:
           DATE="${{ github.event.release.published_at }}"
           VERSION="${TAG#v}"
 
-          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/Feather.ipa"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/UGSign.ipa"
 
           jq \
             --arg version "$VERSION" \

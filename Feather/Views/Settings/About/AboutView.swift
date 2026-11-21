@@ -1,50 +1,36 @@
 //
 //  AboutView.swift
-//  Feather
+//  UG Sign
 //
-//  Created by samara on 30.04.2025.
+//  Branding and the small GPL credit required by the license.
 //
 
 import SwiftUI
 import NimbleViews
-import NimbleJSON
-
-// MARK: - Extension: Model
-extension AboutView {
-	struct CreditsModel: Codable, Hashable {
-		let name: String?
-		let desc: String?
-		let github: String
-	}
-}
 
 // MARK: - View
 struct AboutView: View {
-	@State private var _credits: [CreditsModel] = [
-		.init(name: "C", desc: "Developer", github: "claration"),
-		.init(name: "Asami", desc: "Developer", github: "Nyasami"),
-		.init(name: "Lakhan Lothiyi", desc: "AltStore Repositories", github: "llsc12"),
-	]
-	
-	let pngURL = URL(string: "https://sponsors.claration.dev/sponsors.png")!
+	private let _websiteUrl = "https://ios-ug.github.io"
+	private let _githubUrl = "https://github.com/jahid2025usa-gif/UGsign"
+	private let _licenseUrl = "https://www.gnu.org/licenses/gpl-3.0.html"
 	
 	// MARK: Body
 	var body: some View {
 		NBList(.localized("About")) {
 			Section {
-				VStack {
-					FRAppIconView(size: 72)
+				VStack(spacing: 10) {
+					Image("BrandLogo")
+						.resizable()
+						.scaledToFit()
+						.frame(width: 96, height: 96)
+						.clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
 					
 					Text("UG Sign")
 						.font(.largeTitle)
 						.bold()
-						.foregroundStyle(Color.accentColor)
+						.foregroundStyle(Color(hex: "#0A84FF"))
 					
-					Text("by UG 404")
-						.font(.footnote)
-						.foregroundStyle(.secondary)
-					
-					Text(.localized("Based on Feather by khcrysalis"))
+					Text(.localized("by iOS-UG"))
 						.font(.footnote)
 						.foregroundStyle(.secondary)
 					
@@ -55,72 +41,36 @@ struct AboutView: View {
 					.font(.footnote)
 					.foregroundStyle(.secondary)
 				}
-			}
-			.frame(maxWidth: .infinity)
-			.listRowBackground(EmptyView())
-			
-			NBSection(.localized("Credits")) {
-				ForEach(_credits, id: \.github) { credit in
-					_credit(name: credit.name, desc: credit.desc, github: credit.github)
-				}
-				.transition(.slide)
+				.frame(maxWidth: .infinity)
+				.padding(.vertical, 8)
+				.listRowBackground(EmptyView())
 			}
 			
-			NBSection(.localized("Sponsors")) {
-				Text(.localized("💜 This couldn't of been done without my sponsors!"))
-					.foregroundStyle(.secondary)
-					.padding(.vertical, 2)
-				AsyncImage(url: pngURL) { phase in
-					switch phase {
-					case .empty:
-						ProgressView()
-							.frame(maxWidth: .infinity)
-							.frame(height: 120)
-					case .success(let image):
-						image
-							.resizable()
-							.scaledToFit()
-							.frame(maxWidth: .infinity)
-							.listRowInsets(EdgeInsets())
-					case .failure:
-						Image(systemName: "photo")
-							.resizable()
-							.scaledToFit()
-							.frame(maxWidth: .infinity)
-							.foregroundColor(.gray)
-							.frame(height: 120)
-						
-					@unknown default:
-						EmptyView()
-					}
+			NBSection(.localized("Links")) {
+				Button {
+					UIApplication.open(_websiteUrl)
+				} label: {
+					Label(.localized("UG Sign Website"), systemImage: "safari")
 				}
-			}
-		}
-	}
-}
-
-// MARK: - Extension: view
-extension AboutView {
-	@ViewBuilder
-	private func _credit(
-		name: String?,
-		desc: String?,
-		github: String
-	) -> some View {
-		Button {
-			UIApplication.open("https://github.com/\(github)")
-		} label: {
-			HStack {
-				FRIconCellView(
-					title: name ?? github,
-					subtitle: desc ?? "",
-					iconUrl: URL(string: "https://github.com/\(github).png")!,
-					size: 45,
-					isCircle: true
-				)
 				
-				Image(systemName: "arrow.up.right")
-					.foregroundColor(.secondary.opacity(0.65))
+				Button {
+					UIApplication.open(_githubUrl)
+				} label: {
+					Label(.localized("Source Code"), systemImage: "chevron.left.forwardslash.chevron.right")
+				}
+			}
+			
+			NBSection(.localized("Legal")) {
+				Text(.localized("UG Sign is free and open source. It is based on Feather and is distributed under the GNU General Public License v3.0."))
+					.font(.footnote)
+					.foregroundStyle(.secondary)
+				
+				Button {
+					UIApplication.open(_licenseUrl)
+				} label: {
+					Label(.localized("GNU GPL v3.0 License"), systemImage: "doc.text")
+						.font(.footnote)
+				}
 			}
 		}
 	}

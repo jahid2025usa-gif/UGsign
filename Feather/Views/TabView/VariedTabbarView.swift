@@ -25,7 +25,7 @@ struct VariedTabbarView: View {
 		.alert(.localized("Do you have a certificate?"), isPresented: $_isCertificateAlertPresenting) {
 			Button(.localized("Yes, I have one")) { }
 			Button(.localized("No, I need one")) {
-				if let url = URL(string: "https://t.me/iosUG1") {
+				if let url = URL(string: "https://t.me/UGios") {
 					UIApplication.shared.open(url)
 				}
 			}

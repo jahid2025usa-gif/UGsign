@@ -51,14 +51,14 @@ struct SigningView: View {
 		
 	// MARK: Body
 	var body: some View {
-		NBNavigationView("", displayMode: .inline) {
+		NBNavigationView(app.name ?? .localized("Signature"), displayMode: .inline) {
 			Form {
-				_header(for: app)
 				_identity(for: app)
 				_certificate()
 				_logo(for: app)
 				_removeLibrary(for: app)
 				_injection(for: app)
+				_packageName()
 				_compression()
 				_other()
 				_moreOptions()
@@ -79,7 +79,13 @@ struct SigningView: View {
 							Button {
 								_start()
 							} label: {
-								NBSheetButton(title: .localized("Signature"), style: .prominent)
+								Text(.localized("Signature"))
+									.font(.system(size: 18, weight: .semibold))
+									.foregroundStyle(.white)
+									.frame(maxWidth: .infinity)
+									.frame(height: 50)
+									.background(Color(red: 1.0, green: 0.23, blue: 0.19))
+									.clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
 									.padding()
 							}
 							.buttonStyle(.plain)
@@ -90,11 +96,17 @@ struct SigningView: View {
 			}
 
 			.toolbar {
-				NBToolbarButton(role: .dismiss)
-				ToolbarItem(placement: .principal) {
-					Text("UG")
-						.font(.system(size: 24, weight: .black, design: .rounded))
-						.foregroundStyle(Color(red: 1.0, green: 0.18, blue: 0.33))
+				ToolbarItem(placement: .topBarLeading) {
+					Button {
+						dismiss()
+					} label: {
+						Image(systemName: "chevron.left")
+							.font(.system(size: 17, weight: .semibold))
+							.foregroundStyle(.primary)
+							.frame(width: 40, height: 40)
+							.background(Color(uiColor: .tertiarySystemFill), in: Circle())
+					}
+					.buttonStyle(.plain)
 				}
 				NBToolbarButton(
 					.localized("Reset"),
@@ -129,6 +141,22 @@ struct SigningView: View {
 			}
 			.disabled(_isSigning)
 			.animation(.smooth, value: _isSigning)
+			.overlay {
+				if _isSigning {
+					ZStack {
+						Color.black.opacity(0.45).ignoresSafeArea()
+						VStack(spacing: 14) {
+							ProgressView()
+								.tint(.white)
+							Text(.localized("Signing…"))
+								.font(.subheadline)
+								.foregroundStyle(.white)
+						}
+						.padding(24)
+						.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+					}
+				}
+			}
 		}
 		.onAppear {
 			// ppq protection
@@ -160,29 +188,7 @@ struct SigningView: View {
 
 // MARK: - Extension: View
 extension SigningView {
-	@ViewBuilder
-	private func _header(for app: AppInfoPresentable) -> some View {
-		Section {
-			VStack(spacing: 10) {
-				if let icon = appIcon {
-					Image(uiImage: icon)
-						.appIconStyle()
-				} else {
-					FRAppIconView(app: app, size: 88)
-				}
-				
-				Text(app.name ?? .localized("Unknown"))
-					.font(.title2.bold())
-				
-				Text(app.identifier ?? .localized("Unknown"))
-					.font(.footnote)
-					.foregroundStyle(.secondary)
-			}
-			.frame(maxWidth: .infinity)
-			.listRowBackground(EmptyView())
-		}
-	}
-	
+
 	// MARK: - ESign-style sections
 	//
 	// ESign lays the signing screen out flat: one section per field, in
@@ -352,12 +358,17 @@ extension SigningView {
 				)
 			}
 			
-			Text(.localized("Package file name"))
-				.font(.footnote)
-				.foregroundStyle(.secondary)
-			
+		} footer: {
+			Text(.localized("Inject dylibs, frameworks and Debian packages into the app bundle."))
+		}
+	}
+	
+	@ViewBuilder
+	private func _packageName() -> some View {
+		NBSection(.localized("Package file name")) {
 			Text(_packageFileName)
 				.font(.footnote)
+				.foregroundStyle(.secondary)
 		} footer: {
 			Text(.localized("The number in the package file name is the time the IPA is packed."))
 		}
@@ -389,11 +400,11 @@ extension SigningView {
 			Toggle(.localized("Remove UISupportedDevices"), isOn: $_temporaryOptions.removeSupportedDevices)
 			Toggle(.localized("Removed URLScheme"), isOn: $_temporaryOptions.removeURLScheme)
 			Toggle(.localized("Supports Document Browser"), isOn: $_temporaryOptions.fileSharing)
-			Toggle(.localized("Replace Substrate with ElleKit"), isOn: $_temporaryOptions.experiment_replaceSubstrateWithEllekit)
+			Toggle(.localized("Auto modify jailbreak dependencies"), isOn: $_temporaryOptions.experiment_replaceSubstrateWithEllekit)
 			Toggle(.localized("Modify configuration only, no signature."), isOn: _modifyOnlyBinding)
 			Toggle(.localized("Remove mobileprovision after signing"), isOn: $_temporaryOptions.removeProvisioning)
 		} footer: {
-			Text(.localized("Replace Substrate with ElleKit rewrites jailbreak dependencies to ElleKit instead of CydiaSubstrate."))
+			Text(.localized("Rewrites jailbreak dependencies to ElleKit instead of CydiaSubstrate."))
 		}
 	}
 	
@@ -518,7 +529,7 @@ extension SigningView {
 				
 				if _temporaryOptions.post_installAppAfterSigned {
 					DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-						NotificationCenter.default.post(name: Notification.Name("Feather.installApp"), object: nil)
+						NotificationCenter.default.post(name: Notification.Name("UGSign.installApp"), object: nil)
 					}
 				}
 				dismiss()

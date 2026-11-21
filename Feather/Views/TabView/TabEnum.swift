@@ -1,54 +1,53 @@
 //
 //  TabEnum.swift
-//  feather
+//  UG Sign
 //
-//  Created by samara on 22.03.2025.
+//  Based on Feather (GPL-3.0).
 //
 
 import SwiftUI
 import NimbleViews
 
 enum TabEnum: String, CaseIterable, Hashable {
+	case files
+	case apps
 	case sources
-	case library
+	case downloads
 	case settings
-	case certificates
 	
 	var title: String {
 		switch self {
-		case .sources:     	return .localized("Sources")
-		case .library: 		return .localized("Library")
-		case .settings: 	return .localized("Settings")
-		case .certificates:	return .localized("Certificates")
+		case .files:		return .localized("Files")
+		case .apps:			return .localized("Apps")
+		case .sources:		return .localized("AppStore")
+		case .downloads:	return .localized("Downloads")
+		case .settings:		return .localized("Settings")
 		}
 	}
 	
 	var icon: String {
 		switch self {
-		case .sources: 		return "globe.desk"
-		case .library: 		return "square.grid.2x2"
-		case .settings: 	return "gearshape.2"
-		case .certificates: return "person.text.rectangle"
+		case .files:		return "tray"
+		case .apps:			return "square.grid.2x2"
+		case .sources:		return "bag"
+		case .downloads:	return "arrow.down.to.line"
+		case .settings:		return "gearshape"
 		}
 	}
 	
 	@ViewBuilder
 	static func view(for tab: TabEnum) -> some View {
 		switch tab {
-		case .sources: SourcesView()
-		case .library: LibraryView()
-		case .settings: SettingsView()
-		case .certificates: NBNavigationView(.localized("Certificates")) { CertificatesView() }
+		case .files:		FileListView()
+		case .apps:			LibraryView()
+		case .sources:		SourcesView()
+		case .downloads:	DownloadsView()
+		case .settings:		SettingsView()
 		}
 	}
 	
 	static var defaultTabs: [TabEnum] {
-		return [
-			.sources,
-			.library,
-			.certificates,
-			.settings
-		]
+		return [.files, .apps, .sources, .downloads, .settings]
 	}
 	
 	static var customizableTabs: [TabEnum] {

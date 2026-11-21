@@ -1,15 +1,15 @@
 //
 //  TabbarView.swift
-//  feather
+//  UG Sign
 //
-//  Created by samara on 23.03.2025.
+//  Based on Feather (GPL-3.0).
 //
 
 import SwiftUI
 
 struct TabbarView: View {
-	@State private var selectedTab: TabEnum = .sources
-
+	@State private var selectedTab: TabEnum = .files
+	
 	var body: some View {
 		TabView(selection: $selectedTab) {
 			ForEach(TabEnum.defaultTabs, id: \.hashValue) { tab in
@@ -20,5 +20,6 @@ struct TabbarView: View {
 					.tag(tab)
 			}
 		}
+		.tint(Color(hex: "#0A84FF"))
 	}
 }

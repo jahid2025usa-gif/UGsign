@@ -58,11 +58,11 @@ struct TunnelView: View {
 			
 			NBSection(.localized("Help")) {
 				Button(.localized("Pairing File Guide"), systemImage: "questionmark.circle") {
-					UIApplication.open("https://github.com/claration/Impactor#pairing-file")
+					UIApplication.open("https://github.com/jahid2025usa-gif/UGsign")
 				}
 				if isLocalDevVpnAvailable {
 					Button(.localized("Connect to LocalDevVPN"), systemImage: "link") {
-						UIApplication.open("localdevvpn://enable?scheme=feather")
+						UIApplication.open("localdevvpn://enable?scheme=ugsign")
 					}
 				} else {
 					Button(.localized("Download LocalDevVPN"), systemImage: "arrow.down.app") {
