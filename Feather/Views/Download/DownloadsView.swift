@@ -27,7 +27,28 @@ struct DownloadsView: View {
 			_sections()
 		}
 		.listStyle(.plain)
-		.toolbar { _toolbar() }
+		.toolbar {
+			ToolbarItem(placement: .topBarTrailing) {
+				Menu {
+					Button(.localized("Download from URL"), systemImage: "globe") {
+						_urlString = ""
+						_isURLPresenting = true
+					}
+					Button(.localized("Import File"), systemImage: "folder") {
+						_isImportingPresenting = true
+					}
+					Divider()
+					Button(.localized("Open Archives"), systemImage: "archivebox") {
+						if let url = FileManager.default.archives.toSharedDocumentsURL() {
+							UIApplication.open(url)
+						}
+					}
+				} label: {
+					Image(systemName: "plus.circle.fill")
+						.font(.system(size: 21))
+				}
+			}
+		}
 		.alert(.localized("Download from URL"), isPresented: $_isURLPresenting) { _urlAlertActions() }
 		.sheet(isPresented: $_isImportingPresenting) { _importSheet() }
 		.sheet(item: $_infoArchive) { item in
@@ -39,7 +60,7 @@ struct DownloadsView: View {
 			presenting: _deletingArchive
 		) { item in _deleteActions(item) }
 		message: { item in
-			Text(.localized("Are you sure you want to delete “%@”?", arguments: item.name))
+			Text(verbatim: .localized("Are you sure you want to delete “%@”?", arguments: item.name))
 		}
 		.onAppear(perform: _reloadArchives)
 		.onChange(of: _downloadManager.downloads.count) { _ in _reloadArchives() }
@@ -142,30 +163,6 @@ struct DownloadsView: View {
 			.padding(.vertical, 40)
 			.listRowBackground(Color.clear)
 			.listRowSeparator(.hidden)
-		}
-	}
-	
-	@ViewBuilder
-	private func _toolbar() -> some View {
-		ToolbarItem(placement: .topBarTrailing) {
-			Menu {
-				Button(.localized("Download from URL"), systemImage: "globe") {
-					_urlString = ""
-					_isURLPresenting = true
-				}
-				Button(.localized("Import File"), systemImage: "folder") {
-					_isImportingPresenting = true
-				}
-				Divider()
-				Button(.localized("Open Archives"), systemImage: "archivebox") {
-					if let url = FileManager.default.archives.toSharedDocumentsURL() {
-						UIApplication.open(url)
-					}
-				}
-			} label: {
-				Image(systemName: "plus.circle.fill")
-					.font(.system(size: 21))
-			}
 		}
 	}
 	

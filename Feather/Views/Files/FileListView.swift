@@ -135,11 +135,35 @@ struct FileListView: View {
 				placement: .navigationBarDrawer(displayMode: .always),
 				prompt: .localized("Search")
 			)
-			.toolbar { _toolbar(directory) }
+			.toolbar {
+				ToolbarItem(placement: .topBarTrailing) {
+					Menu {
+						Button(.localized("Import File"), systemImage: "square.and.arrow.down") {
+							_isImportingPresenting = true
+						}
+						Button(.localized("New Folder"), systemImage: "folder.badge.plus") {
+							_newFolderName = ""
+							_isNewFolderPresenting = true
+						}
+						Divider()
+						Button(.localized("Open in Files"), systemImage: "folder") {
+							if let url = directory.toSharedDocumentsURL() {
+								UIApplication.open(url)
+							}
+						}
+					} label: {
+						Image(systemName: "ellipsis.circle.fill")
+							.font(.system(size: 21))
+							.foregroundStyle(.secondary)
+					}
+				}
+			}
 			.onAppear { _reload(directory) }
 			.onChange(of: directory) { _ in _reload(directory) }
 			.sheet(isPresented: $_isImportingPresenting) { _importSheet(directory) }
-			.sheet(item: $_infoItem) { item in FileInfoView(item: item) }
+			.sheet(item: $_infoItem) { item in
+				FileInfoView(item: item)
+			}
 			.alert(.localized("New Folder"), isPresented: $_isNewFolderPresenting) { _newFolderAlert(directory) }
 			.alert(
 				.localized("Delete File"),
@@ -147,7 +171,7 @@ struct FileListView: View {
 				presenting: _deletingItem
 			) { item in _deleteAlertActions(item) }
 			message: { item in
-				Text(.localized("Are you sure you want to delete “%@”?", arguments: item.name))
+				Text(verbatim: .localized("Are you sure you want to delete “%@”?", arguments: item.name))
 			}
 			.confirmationDialog(
 				_selectedItem?.name ?? "",
@@ -161,7 +185,7 @@ struct FileListView: View {
 			) {
 				Button(.localized("OK"), role: .cancel) {}
 			} message: {
-				Text(_errorMessage ?? "")
+				Text(verbatim: _errorMessage ?? "")
 			}
 			.overlay { _preparingOverlay() }
 	}
@@ -286,31 +310,6 @@ struct FileListView: View {
 			.buttonStyle(.plain)
 		}
 		.padding(.vertical, 4)
-	}
-	
-	@ViewBuilder
-	private func _toolbar(_ directory: URL) -> some View {
-		ToolbarItem(placement: .topBarTrailing) {
-			Menu {
-				Button(.localized("Import File"), systemImage: "square.and.arrow.down") {
-					_isImportingPresenting = true
-				}
-				Button(.localized("New Folder"), systemImage: "folder.badge.plus") {
-					_newFolderName = ""
-					_isNewFolderPresenting = true
-				}
-				Divider()
-				Button(.localized("Open in Files"), systemImage: "folder") {
-					if let url = directory.toSharedDocumentsURL() {
-						UIApplication.open(url)
-					}
-				}
-			} label: {
-				Image(systemName: "ellipsis.circle.fill")
-					.font(.system(size: 21))
-					.foregroundStyle(.secondary)
-			}
-		}
 	}
 	
 	@ViewBuilder

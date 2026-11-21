@@ -67,7 +67,49 @@ struct LibraryView: View {
 		NBNavigationView("", displayMode: .inline) {
 			_rows()
 		}
-		.toolbar { _toolbar() }
+		.toolbar {
+			ToolbarItem(placement: .principal) {
+				Picker("", selection: $_scope) {
+					Text(.localized("Unsigned")).tag(Scope.unsigned)
+					Text(.localized("Signed")).tag(Scope.signed)
+				}
+				.pickerStyle(.segmented)
+				.labelsHidden()
+				.frame(width: 210)
+			}
+			
+			ToolbarItem(placement: .topBarLeading) {
+				if _isSelecting {
+					Button(.localized("Delete"), role: .destructive) { _bulkDelete() }
+						.disabled(_selectedAppUUIDs.isEmpty)
+				} else {
+					Menu {
+						_importActions()
+					} label: {
+						Image(systemName: "plus.circle.fill")
+							.font(.system(size: 21))
+					}
+				}
+			}
+			
+			ToolbarItem(placement: .topBarTrailing) {
+				if _isSelecting {
+					Button(.localized("Done")) {
+						withAnimation(.easeInOut(duration: 0.2)) {
+							_isSelecting = false
+							_selectedAppUUIDs.removeAll()
+						}
+					}
+					.bold()
+				} else {
+					Button(.localized("Select")) {
+						withAnimation(.easeInOut(duration: 0.2)) {
+							_isSelecting = true
+						}
+					}
+				}
+			}
+		}
 		.sheet(item: $_selectedInfoAppPresenting) { app in
 			LibraryInfoView(app: app.base)
 		}
@@ -93,12 +135,12 @@ struct LibraryView: View {
 			presenting: _deletingApp
 		) { app in _deleteAlertActions(app) }
 		message: { app in
-			Text(.localized("Are you sure you want to delete “%@”?", arguments: app.base.name ?? ""))
+			Text(verbatim: .localized("Are you sure you want to delete “%@”?", arguments: app.base.name ?? ""))
 		}
 		.alert(_messageTitle, isPresented: _messageBinding) {
 			Button(.localized("OK"), role: .cancel) {}
 		} message: {
-			Text(_messageBody ?? "")
+			Text(verbatim: _messageBody ?? "")
 		}
 		.overlay { _archivingOverlay() }
 		.onReceive(NotificationCenter.default.publisher(for: Notification.Name("UGSign.installApp"))) { _ in
@@ -181,51 +223,6 @@ struct LibraryView: View {
 			.padding(.vertical, 40)
 			.listRowBackground(Color.clear)
 			.listRowSeparator(.hidden)
-		}
-	}
-	
-	@ViewBuilder
-	private func _toolbar() -> some View {
-		ToolbarItem(placement: .principal) {
-			Picker("", selection: $_scope) {
-				Text(.localized("Unsigned")).tag(Scope.unsigned)
-				Text(.localized("Signed")).tag(Scope.signed)
-			}
-			.pickerStyle(.segmented)
-			.labelsHidden()
-			.frame(width: 210)
-		}
-		
-		ToolbarItem(placement: .topBarLeading) {
-			if _isSelecting {
-				Button(.localized("Delete"), role: .destructive) { _bulkDelete() }
-					.disabled(_selectedAppUUIDs.isEmpty)
-			} else {
-				Menu {
-					_importActions()
-				} label: {
-					Image(systemName: "plus.circle.fill")
-						.font(.system(size: 21))
-				}
-			}
-		}
-		
-		ToolbarItem(placement: .topBarTrailing) {
-			if _isSelecting {
-				Button(.localized("Done")) {
-					withAnimation(.easeInOut(duration: 0.2)) {
-						_isSelecting = false
-						_selectedAppUUIDs.removeAll()
-					}
-				}
-				.bold()
-			} else {
-				Button(.localized("Select")) {
-					withAnimation(.easeInOut(duration: 0.2)) {
-						_isSelecting = true
-					}
-				}
-			}
 		}
 	}
 	
